@@ -48,7 +48,7 @@ pipeline {
             emailext(
                 subject: "Build Status: ${currentBuild.currentResult}",
                 body: "Build #${BUILD_NUMBER} Status: ${currentBuild.currentResult}",
-                to: '.com'
+                to: 'Sareenh10@gmail.com'
             )
         }
     }
