@@ -39,7 +39,7 @@ pipeline {
         }
         stage('Validation') {
             steps {
-                sh 'curl -I http://3.110.167.111:3000'
+                sh 'curl -I http://:3000'
             }
         }
     }
