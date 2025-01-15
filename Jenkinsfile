@@ -30,7 +30,7 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 sh '''
-                ssh -o StrictHostKeyChecking=no ec2-user@3.110.167.111 "
+                ssh -o StrictHostKeyChecking=no ubuntu@3.110.167.111 "
                 docker pull 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1 &&
                 docker run -d -p 3000:3000 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
                 "
@@ -39,7 +39,7 @@ pipeline {
         }
         stage('Validation') {
             steps {
-                sh 'curl -I http://:3000'
+                sh 'curl -I http://3.110.167.111:3000'
             }
         }
     }
