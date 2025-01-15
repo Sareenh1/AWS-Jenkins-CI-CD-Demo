@@ -1,136 +1,155 @@
-# Jenkins Setup and Troubleshooting on Ubuntu EC2
+# CI/CD Pipeline for Dockerized Application Deployment
 
-## Project Overview
-This project involves setting up Jenkins on an Ubuntu EC2 instance. The process includes installing Jenkins, resolving issues during installation, and troubleshooting service startup errors. This README documents the steps, commands, and troubleshooting techniques used.
-
----
+This repository demonstrates a CI/CD pipeline implemented using Jenkins to automate the process of building, testing, pushing a Docker image to Amazon ECR, and deploying it to an EC2 instance. Below is a detailed explanation of the pipeline script and its stages.
 
 ## Prerequisites
-- **Ubuntu EC2 Instance**
-- **Java (OpenJDK 11 or higher)**
-- **Administrator privileges**
+1. **Jenkins Server**: A Jenkins instance must be set up and configured.
+2. **AWS ECR**: Amazon Elastic Container Registry (ECR) must be created.
+3. **AWS EC2 Instance**: An EC2 instance should be running and accessible via SSH.
+4. **AWS CLI**: AWS CLI must be configured with the appropriate IAM permissions.
+5. **Docker**: Docker should be installed and running on the Jenkins server and the EC2 instance.
+6. **GitHub Repository**: The application code must be hosted in a GitHub repository.
+7. **Jenkins Credentials**:
+    - `github-creds`: For authenticating with the GitHub repository.
+    - AWS credentials for accessing ECR.
 
----
+## Pipeline Stages
 
-## Steps to Install and Configure Jenkins
-
-### 1. Update System Packages
-```bash
-sudo apt update && sudo apt upgrade -y
+### 1. **Clone Repo**
+This stage pulls the latest code from the specified GitHub repository.
+```groovy
+stage('Clone Repo') {
+    steps {
+        git credentialsId: 'github-creds', url: 'https://github.com/Sareenh1/AWS-Jenkins-CI-CD-Demo.git'
+    }
+}
 ```
+- **Details**:
+    - `credentialsId`: Specifies the Jenkins credential ID for GitHub authentication.
+    - `url`: URL of the GitHub repository.
 
-### 2. Install Java
-Jenkins requires Java to run. Install OpenJDK 11:
-```bash
-sudo apt install openjdk-11-jdk -y
+### 2. **Build Docker Image**
+This stage builds a Docker image for the application using the `Dockerfile` in the repository.
+```groovy
+stage('Build Docker Image') {
+    steps {
+        sh 'docker build -t jenkins-cicd-demo:v1 .'
+    }
+}
 ```
-Verify Java installation:
-```bash
-java -version
+- **Details**:
+    - The `docker build` command tags the image as `jenkins-cicd-demo:v1`.
+
+### 3. **Run Unit Tests**
+This stage runs unit tests for the application.
+```groovy
+stage('Run Unit Tests') {
+    steps {
+        sh 'npm test'
+    }
+}
 ```
+- **Details**:
+    - Assumes `npm` and the test suite are configured in the application.
 
-### 3. Add Jenkins Repository and Key
-```bash
-curl -fsSL https://pkg.jenkins.io/debian/jenkins.io.key | sudo tee \
-    /usr/share/keyrings/jenkins-keyring.asc > /dev/null
-
-echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
-    https://pkg.jenkins.io/debian binary/ | sudo tee \
-    /etc/apt/sources.list.d/jenkins.list > /dev/null
+### 4. **Push to ECR**
+This stage pushes the Docker image to Amazon ECR.
+```groovy
+stage('Push to ECR') {
+    steps {
+        script {
+            sh '''
+            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 992382465189.dkr.ecr.ap-south-1.amazonaws.com
+            sudo docker tag jenkins-cicd-demo:v1 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
+            sudo docker push 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
+            '''
+        }
+    }
+}
 ```
+- **Details**:
+    - Logs into the ECR registry.
+    - Tags the image with the ECR repository URI.
+    - Pushes the image to the specified ECR repository.
 
-### 4. Install Jenkins
-Update the package index and install Jenkins:
-```bash
-sudo apt update
-sudo apt install jenkins -y
+### 5. **Deploy to EC2**
+This stage deploys the Docker container on an EC2 instance.
+```groovy
+stage('Deploy to EC2') {
+    steps {
+        sh '''
+        ssh -o StrictHostKeyChecking=no ubuntu@3.110.167.111 "
+        docker pull 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1 &&
+        docker run -d -p 3000:3000 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
+        "
+        '''
+    }
+}
 ```
+- **Details**:
+    - Uses SSH to connect to the EC2 instance.
+    - Pulls the Docker image from ECR.
+    - Runs the container on port `3000`.
 
-### 5. Start and Enable Jenkins Service
-Start the Jenkins service:
-```bash
-sudo systemctl start jenkins
+### 6. **Validation**
+This stage validates the deployment by checking the application's availability.
+```groovy
+stage('Validation') {
+    steps {
+        sh 'curl -I http://3.110.167.111:3000'
+    }
+}
 ```
-Enable Jenkins to start on boot:
-```bash
-sudo systemctl enable jenkins
+- **Details**:
+    - Sends an HTTP request to the application URL to confirm it is running.
+
+### 7. **Post Actions**
+This section sends a notification email after the pipeline execution.
+```groovy
+post {
+    always {
+        emailext(
+            subject: "Build Status: ${currentBuild.currentResult}",
+            body: "Build #${BUILD_NUMBER} Status: ${currentBuild.currentResult}",
+            to: 'Sareenh10@gmail.com'
+        )
+    }
+}
 ```
+- **Details**:
+    - Sends an email with the build status and build number.
 
-### 6. Troubleshooting Service Failures
-If Jenkins fails to start, check its status:
-```bash
-sudo systemctl status jenkins
-```
-Examine detailed logs:
-```bash
-sudo journalctl -xeu jenkins.service
-```
+## Configuration Instructions
 
-### 7. Verify Installation
-Access Jenkins through a web browser:
-```
-http://<your-ec2-public-ip>:8080
-```
-Retrieve the initial admin password:
-```bash
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
-```
-Use this password to complete the setup wizard.
+### AWS CLI Configuration
+1. Install the AWS CLI on the Jenkins server.
+2. Configure the CLI with the required credentials and region:
+   ```bash
+   aws configure
+   ```
 
----
+### Jenkins Configuration
+1. Install necessary plugins:
+    - Git Plugin
+    - Docker Pipeline Plugin
+    - Email Extension Plugin
+2. Add credentials:
+    - Add GitHub credentials (`github-creds`).
+    - Add AWS credentials if required.
+3. Create a pipeline job and paste the above script.
 
-## Troubleshooting Steps
+### EC2 Instance Configuration
+1. Install Docker on the EC2 instance:
+   ```bash
+   sudo apt update && sudo apt install -y docker.io
+   ```
+2. Ensure the EC2 instance's security group allows inbound traffic on port `3000`.
 
-### Missing Jenkins Log File
-If `/var/log/jenkins/jenkins.log` does not exist, create the required directories:
-```bash
-sudo mkdir -p /var/lib/jenkins /var/log/jenkins /var/cache/jenkins
-sudo chown -R jenkins:jenkins /var/lib/jenkins /var/log/jenkins /var/cache/jenkins
-```
-
-### Port Conflicts
-Ensure that port 8080 is not in use:
-```bash
-sudo netstat -tuln | grep 8080
-```
-Change the Jenkins port if necessary:
-```bash
-sudo nano /etc/default/jenkins
-```
-Modify the `HTTP_PORT` value and restart Jenkins:
-```bash
-sudo systemctl restart jenkins
-```
-
-### Manually Run Jenkins for Debugging
-Run Jenkins in the foreground to identify issues:
-```bash
-sudo -u jenkins java -jar /usr/share/jenkins/jenkins.war
-```
-
----
-
-## Key Commands
-- **Check Jenkins Status:**
-  ```bash
-  sudo systemctl status jenkins
-  ```
-- **View Logs:**
-  ```bash
-  sudo journalctl -xeu jenkins.service
-  ```
-- **Initial Admin Password:**
-  ```bash
-  sudo cat /var/lib/jenkins/secrets/initialAdminPassword
-  ```
-
----
-
-## Notes
-- Ensure your security group allows traffic on port 8080.
-- Regularly check Jenkins logs for any issues.
-
----
+## Testing the Pipeline
+1. Trigger the pipeline manually or configure a webhook for automatic triggers.
+2. Monitor the stages for any errors.
+3. Verify the deployment by accessing `http://3.110.167.111:3000` in a browser.
 
 ## Conclusion
-This README provides a step-by-step guide to installing, configuring, and troubleshooting Jenkins on Ubuntu. Following these instructions ensures a successful setup and smooth operation of Jenkins on your EC2 instance.
+This pipeline automates the entire process from code pull to deployment, ensuring faster and more reliable delivery of updates. The steps provided can be customized further to meet specific requirements.
+
