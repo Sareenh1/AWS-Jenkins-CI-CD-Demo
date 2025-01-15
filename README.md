@@ -59,9 +59,9 @@ stage('Push to ECR') {
     steps {
         script {
             sh '''
-            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 992382465189.dkr.ecr.ap-south-1.amazonaws.com
-            sudo docker tag jenkins-cicd-demo:v1 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
-            sudo docker push 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
+            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 999999999999.dkr.ecr.ap-south-1.amazonaws.com
+            sudo docker tag jenkins-cicd-demo:v1 999999999999.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
+            sudo docker push 999999999999.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
             '''
         }
     }
@@ -80,7 +80,7 @@ stage('Deploy to EC2') {
         sh '''
         ssh -o StrictHostKeyChecking=no ubuntu@3.110.167.111 "
         docker pull 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1 &&
-        docker run -d -p 3000:3000 992382465189.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
+        docker run -d -p 3000:3000 999999999999.dkr.ecr.ap-south-1.amazonaws.com/jenkins-cicd-demo:v1
         "
         '''
     }
@@ -96,7 +96,7 @@ This stage validates the deployment by checking the application's availability.
 ```groovy
 stage('Validation') {
     steps {
-        sh 'curl -I http://3.110.167.111:3000'
+        sh 'curl -I http://3.110.162.111:3000'
     }
 }
 ```
